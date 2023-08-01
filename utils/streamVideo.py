@@ -6,7 +6,7 @@ import cv2
 
 
 class CustomThread(threading.Thread):
-    def __init__(self, m3u8_url, cameraSize, fps):
+    def __init__(self, m3u8_url, cameraSize, timeSleep):
         threading.Thread.__init__(self)
         self.pipe = sp.Popen(["C:/ffmpeg/bin/ffmpeg.exe", "-i", m3u8_url,
                               "-loglevel", "quiet",
@@ -17,7 +17,7 @@ class CustomThread(threading.Thread):
                              stdin=sp.PIPE, stdout=sp.PIPE)
         self.size = cameraSize[0] * cameraSize[1] * cameraSize[2]
         self.cameraSize = cameraSize
-        self.fps = fps
+        self.timeSleep = timeSleep
         self.c = True
         self.lastFrame = None
 
@@ -25,7 +25,7 @@ class CustomThread(threading.Thread):
         while self.c:
 
             raw_image = self.pipe.stdout.read(self.size)
-            time.sleep(self.fps)
+            time.sleep(self.timeSleep)
             try:
                 self.lastFrame = np.frombuffer(raw_image, dtype='uint8').reshape(self.cameraSize)
             except ValueError:
@@ -51,3 +51,29 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
     return img
+
+
+class opencvThread(threading.Thread):
+    def __init__(self, url, timeSleep):
+        threading.Thread.__init__(self)
+        self.pipe = cv2.VideoCapture(url)
+        self.timeSleep = timeSleep
+        self.c = True
+        self.k = -5
+        self.lastFrame = None
+
+    def run(self):
+        while self.c:
+            ret, frame = self.pipe.read()
+            if frame is not None:
+                self.lastFrame = frame
+            else:
+                self.k += 1
+                self.c = min(abs(self.k), 1)
+            time.sleep(self.timeSleep)
+
+        return
+
+    def stop(self):
+        self.c = False
+        print("stopped")
