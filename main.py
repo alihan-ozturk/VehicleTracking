@@ -3,7 +3,7 @@ import sys
 import time
 import cv2
 import numpy as np
-from utils.streamVideo import CustomThread, letterbox
+from utils.streamVideo import CustomThread, opencvThread, letterbox
 from utils.click import click, draw_boxes
 import torch
 from models.experimental import attempt_load
@@ -15,16 +15,20 @@ from sort import *
 # colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(4)]
 colors = [[0, 255, 223], [0, 191, 255], [80, 127, 255], [99, 49, 222]]
 names = ["bus", "shuttle", "motorcycle", "car"]
+classSize = len(names)
 
 model = attempt_load("./best.pt", map_location="cuda")
 model = TracedModel(model, "cuda", 640)
 
-m3u8_url = "https://hls.ibb.gov.tr/tkm1/hls/492.stream/chunklist.m3u8"
-streamSize = (1080, 1920, 3)
+m3u8_url = "https://izum-cams.izmir.bel.tr/mjpeg/604e7624-ba21-427a-a48b-1fa1966d7294"
+streamSize = (576, 720, 3)
+fps = 10  # 12.5
+sleepTime = 1 / fps
 
 key = ord("q")
 
-thread = CustomThread(m3u8_url, streamSize, 0.07)
+# thread = CustomThread(m3u8_url, streamSize, sleepTime)
+thread = opencvThread(m3u8_url, sleepTime)
 thread.start()
 
 d = 4
@@ -32,7 +36,7 @@ print(f"wait {d} seconds")
 time.sleep(d)
 
 if thread.lastFrame is not None:
-    maskC = click(thread.lastFrame, "mask.txt", saveConfig=True)
+    maskC = click(thread.lastFrame, "mask.txt", saveConfig=False)
 else:
     thread.stop()
     sys.exit()
@@ -40,13 +44,13 @@ else:
 ret, thresh = cv2.threshold(maskC.mask, 0, 255, cv2.THRESH_BINARY)
 pathSize = len(maskC.masks)
 
-sort_tracker = Sort(max_age=6,
-                    min_hits=2,
+sort_tracker = Sort(max_age=15,
+                    min_hits=6,
                     iou_threshold=0.2)
 
 while True:
     im0 = thread.lastFrame.copy()
-
+    start = time.time()
     img = cv2.bitwise_and(im0, im0, mask=thresh)
     img[maskC.mask == 0] = 114
     img = letterbox(img)
@@ -74,17 +78,17 @@ while True:
                 s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "
 
             dets_to_sort = np.empty((0, 6))
-            nv = {path+1: {name: 0 for name in names} for path in range(pathSize)}
+            nv = {i + 1: {j: 0 for j in range(classSize)} for i in range(pathSize)}
 
             for x1, y1, x2, y2, conf, detclass in det.cpu().detach().numpy():
                 xx, yy, detclass = int((x2 - (x2 - x1) / 2)), int((y2 - (y2 - y1) / 2)), int(detclass)
                 path = maskC.mask[yy, xx]
                 if path != 0:
-                    nv[path][names[detclass]] += 1
+                    nv[path][detclass] += 1
                 label = f'{names[detclass]} {conf:.2f}'
                 dets_to_sort = np.vstack((dets_to_sort, np.array([x1, y1, x2, y2, conf, detclass])))
 
-            cv2.putText(im0, json.dumps(nv), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (12, 188, 122), 3, cv2.LINE_AA)
+            cv2.putText(im0, json.dumps(nv), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (130, 18, 13), 2, cv2.LINE_AA)
             tracked_dets = sort_tracker.update(dets_to_sort, True)
             tracks = sort_tracker.getTrackers()
 
@@ -95,7 +99,6 @@ while True:
                 confidences = None
 
                 for t, track in enumerate(tracks):
-
                     track_color = colors[int(track.detclass)]
                     [cv2.line(im0, (int(track.centroidarr[i][0]),
                                     int(track.centroidarr[i][1])),
@@ -108,9 +111,9 @@ while True:
             im0 = draw_boxes(im0, bbox_xyxy, identities, categories, confidences, names, colors)
 
     cv2.imshow("frame", im0)
-
+    # print(time.time() - start)
+    thread.timeSleep = max((sleepTime - (time.time() - start)), 0)
     if cv2.waitKey(1) == key:
-        
         cv2.destroyAllWindows()
         break
 
