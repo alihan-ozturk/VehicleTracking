@@ -18,7 +18,8 @@ class click:
             with open(configName, 'r') as f:
                 try:
                     self.allPts = json.load(f)
-                    mask = np.zeros_like(self.__img[:, :, 0])
+                    # mask = np.zeros_like(self.__img[:, :, 0])
+                    mask = np.zeros(self.__img.shape[:2], dtype=np.uint8)
                     for pts in self.allPts:
                         cv.fillConvexPoly(mask, np.array(pts), 255)
                         masked = cv.bitwise_and(self.__backup, self.__backup, mask=mask)
@@ -61,14 +62,17 @@ class click:
             self.__pts = []
         if len(self.allPts) == 0:
             raise Exception("no pts")
-        mask = np.zeros_like(self.__img[:, :, 0])
+        # mask = np.zeros_like(self.__img[:, :, 0])
+        mask = np.zeros(self.__img.shape[:2], dtype=np.uint8)
 
         self.masks = []
         for i in range(len(self.allPts)):
             cv.fillConvexPoly(mask, np.array(self.allPts[i]), i+1)
             masked = cv.bitwise_and(self.__backup, self.__backup, mask=mask)
 
-            mask2 = np.zeros_like(self.__img[:, :, 0])
+            # mask2 = np.zeros_like(self.__img[:, :, 0])
+            mask2 = np.zeros(self.__img.shape[:2], dtype=np.uint8)
+
             cv.fillConvexPoly(mask2, np.array(self.allPts[i]), 255)
             self.masks.append(mask2)
         if __KEY == self.KEY:
