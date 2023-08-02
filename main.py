@@ -10,6 +10,7 @@ from models.experimental import attempt_load
 from utils.torch_utils import TracedModel
 from utils.general import non_max_suppression, scale_coords
 import random
+import pandas as pd
 from sort import *
 
 # colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(4)]
@@ -21,14 +22,14 @@ model = attempt_load("./best.pt", map_location="cuda")
 model = TracedModel(model, "cuda", 640)
 
 m3u8_url = "https://izum-cams.izmir.bel.tr/mjpeg/604e7624-ba21-427a-a48b-1fa1966d7294"
-streamSize = (576, 720, 3)
+streamSize = (480, 800, 3)
 fps = 10  # 12.5
 sleepTime = 1 / fps
 
 key = ord("q")
 
-# thread = CustomThread(m3u8_url, streamSize, sleepTime)
-thread = opencvThread(m3u8_url, sleepTime)
+thread = CustomThread(m3u8_url, streamSize, sleepTime)
+# thread = opencvThread(m3u8_url, sleepTime)
 thread.start()
 
 d = 4
@@ -36,7 +37,8 @@ print(f"wait {d} seconds")
 time.sleep(d)
 
 if thread.lastFrame is not None:
-    maskC = click(thread.lastFrame, "mask.txt", saveConfig=False)
+    maskC = click(thread.lastFrame, "mask.txt", saveConfig=True)
+    startFinish = click(maskC.mask * 255 // len(maskC.masks), "startFinish.txt", saveConfig=True)
 else:
     thread.stop()
     sys.exit()
@@ -47,6 +49,11 @@ pathSize = len(maskC.masks)
 sort_tracker = Sort(max_age=15,
                     min_hits=6,
                     iou_threshold=0.2)
+temp = pd.DataFrame(columns=['id', 'class', 'startPath', 'startTime', 'life'])
+temp.set_index("id", inplace=True)
+
+history = pd.DataFrame(columns=['id', 'class', 'finishPath', 'finishTime'])
+history.set_index("id", inplace=True)
 
 while True:
     im0 = thread.lastFrame.copy()
@@ -92,26 +99,39 @@ while True:
             tracked_dets = sort_tracker.update(dets_to_sort, True)
             tracks = sort_tracker.getTrackers()
 
+            for det in tracked_dets:
+                identities = tracked_dets[:, 8]
+                categories = tracked_dets[:, 4]
+                cy, cx = int(det[0] + (det[2] - det[0]) / 2), int(det[1] + (det[3] - det[1]) // 2)
+                if identities in temp.index:
+                    sf = startFinish.mask[cy, cx]
+                    if sf == temp.loc[identities].startPath:
+                        temp.loc[identities] = [categories, sf, time.time(), False, False, 1000]
+                    else:
+                        temp.loc[identities] = [categories, sf, time.time(), False, False, 1000]
+                else:
+                    history.loc[det[:, 8]]
+
+                history[im0[cx:cx + 5, cy:cy + 5] - 1].insert()
             if len(tracked_dets) > 0:
                 bbox_xyxy = tracked_dets[:, :4]
                 identities = tracked_dets[:, 8]
                 categories = tracked_dets[:, 4]
                 confidences = None
 
-                for t, track in enumerate(tracks):
-                    track_color = colors[int(track.detclass)]
-                    [cv2.line(im0, (int(track.centroidarr[i][0]),
-                                    int(track.centroidarr[i][1])),
-                              (int(track.centroidarr[i + 1][0]),
-                               int(track.centroidarr[i + 1][1])),
-                              track_color, thickness=1)
-                     for i, _ in enumerate(track.centroidarr)
-                     if i < len(track.centroidarr) - 1]
+                # for t, track in enumerate(tracks):
+                #     track_color = colors[int(track.detclass)]
+                #     [cv2.line(im0, (int(track.centroidarr[i][0]),
+                #                     int(track.centroidarr[i][1])),
+                #               (int(track.centroidarr[i + 1][0]),
+                #                int(track.centroidarr[i + 1][1])),
+                #               track_color, thickness=1)
+                #      for i, _ in enumerate(track.centroidarr)
+                #      if i < len(track.centroidarr) - 1]
 
-            im0 = draw_boxes(im0, bbox_xyxy, identities, categories, confidences, names, colors)
+                im0 = draw_boxes(im0, bbox_xyxy, identities, categories, confidences, names, colors)
 
     cv2.imshow("frame", im0)
-    # print(time.time() - start)
     thread.timeSleep = max((sleepTime - (time.time() - start)), 0)
     if cv2.waitKey(1) == key:
         cv2.destroyAllWindows()
