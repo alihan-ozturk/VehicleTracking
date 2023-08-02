@@ -52,7 +52,7 @@ sort_tracker = Sort(max_age=15,
 temp = pd.DataFrame(columns=['id', 'class', 'startPath', 'startTime', 'life'])
 temp.set_index("id", inplace=True)
 
-history = pd.DataFrame(columns=['id', 'class', 'finishPath', 'finishTime'])
+history = pd.DataFrame(columns=['id', 'class', 'startPath', 'finishPath', 'finishTime'])
 history.set_index("id", inplace=True)
 
 while True:
@@ -100,19 +100,20 @@ while True:
             tracks = sort_tracker.getTrackers()
 
             for det in tracked_dets:
-                identities = tracked_dets[:, 8]
-                categories = tracked_dets[:, 4]
+                identities = int(det[8])
+                categories = int(det[4])
                 cy, cx = int(det[0] + (det[2] - det[0]) / 2), int(det[1] + (det[3] - det[1]) // 2)
-                if identities in temp.index:
-                    sf = startFinish.mask[cy, cx]
-                    if sf == temp.loc[identities].startPath:
-                        temp.loc[identities] = [categories, sf, time.time(), False, False, 1000]
-                    else:
-                        temp.loc[identities] = [categories, sf, time.time(), False, False, 1000]
-                else:
-                    history.loc[det[:, 8]]
+                sf = startFinish.mask[cy, cx]
 
-                history[im0[cx:cx + 5, cy:cy + 5] - 1].insert()
+                if sf:
+                    if identities not in temp.index or sf == temp.loc[identities].startPath:
+                        temp.loc[identities] = [categories, sf, time.time(), 1000]
+                    else:
+                        arriveTime = time.time() - temp.loc[identities].startTime
+                        history.loc[identities] = [categories, temp.loc[identities].startPath, sf, arriveTime]
+                        temp.drop(identities, inplace=True)
+                temp.life -= 1
+                print(temp, history)
             if len(tracked_dets) > 0:
                 bbox_xyxy = tracked_dets[:, :4]
                 identities = tracked_dets[:, 8]
