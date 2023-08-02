@@ -113,7 +113,9 @@ while True:
                         history.loc[identities] = [categories, temp.loc[identities].startPath, sf, arriveTime]
                         temp.drop(identities, inplace=True)
                 temp.life -= 1
-                print(temp, history)
+                if len(temp) > 0:
+                    temp.drop(temp[temp.life < 0].index, inplace=True)
+                print(temp)
             if len(tracked_dets) > 0:
                 bbox_xyxy = tracked_dets[:, :4]
                 identities = tracked_dets[:, 8]
