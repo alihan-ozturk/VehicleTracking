@@ -21,27 +21,34 @@ classSize = len(names)
 model = attempt_load("./best.pt", map_location="cuda")
 model = TracedModel(model, "cuda", 640)
 
-m3u8_url = "https://izum-cams.izmir.bel.tr/mjpeg/604e7624-ba21-427a-a48b-1fa1966d7294"
-streamSize = (480, 800, 3)
-fps = 10  # 12.5
-sleepTime = 1 / fps
+# m3u8_url = "https://izum-cams.izmir.bel.tr/mjpeg/604e7624-ba21-427a-a48b-1fa1966d7294"
+# streamSize = (480, 800, 3)
+# fps = 10  # 12.5
+# sleepTime = 1 / fps
 
 key = ord("q")
 
-thread = CustomThread(m3u8_url, streamSize, sleepTime)
+# thread = CustomThread(m3u8_url, streamSize, sleepTime)
 # thread = opencvThread(m3u8_url, sleepTime)
-thread.start()
+# thread.start()
 
-d = 4
-print(f"wait {d} seconds")
-time.sleep(d)
+# d = 4
+# print(f"wait {d} seconds")
+# time.sleep(d)
 
-if thread.lastFrame is not None:
-    maskC = click(thread.lastFrame, "mask.txt", saveConfig=True)
-    startFinish = click(maskC.mask * 255 // len(maskC.masks), "startFinish.txt", saveConfig=True)
-else:
-    thread.stop()
-    sys.exit()
+# if thread.lastFrame is not None:
+#     maskC = click(thread.lastFrame, "mask.txt", saveConfig=True)
+#     startFinish = click(maskC.mask * 255 // len(maskC.masks), "startFinish.txt", saveConfig=True)
+# else:
+#     thread.stop()
+#     sys.exit()
+
+cap = cv2.VideoCapture("test.ts")
+
+ret, lastFrame = cap.read()
+
+maskC = click(lastFrame, "mask.txt", saveConfig=True)
+startFinish = click(maskC.mask * 255 // len(maskC.masks), "startFinish.txt", saveConfig=True)
 
 ret, thresh = cv2.threshold(maskC.mask, 0, 255, cv2.THRESH_BINARY)
 pathSize = len(maskC.masks)
@@ -49,15 +56,20 @@ pathSize = len(maskC.masks)
 sort_tracker = Sort(max_age=15,
                     min_hits=6,
                     iou_threshold=0.2)
-temp = pd.DataFrame(columns=['id', 'class', 'startPath', 'startTime', 'life'])
+temp = pd.DataFrame(columns=['id', 'class', 'startPath', 'startTime', 'cx', 'cy', 'life'])
 temp.set_index("id", inplace=True)
 
-history = pd.DataFrame(columns=['id', 'class', 'startPath', 'finishPath', 'finishTime'])
+history = pd.DataFrame(columns=['id', 'class', 'startPath', 'finishPath', 'pixelDistance', 'radian', 'finishTime'])
 history.set_index("id", inplace=True)
 
+start = 0
 while True:
-    im0 = thread.lastFrame.copy()
-    start = time.time()
+    start += 1
+    # im0 = thread.lastFrame.copy()
+    ret, im0 = cap.read()
+    if not ret:
+        break
+    # start = time.time()
     img = cv2.bitwise_and(im0, im0, mask=thresh)
     img[maskC.mask == 0] = 114
     img = letterbox(img)
@@ -103,19 +115,23 @@ while True:
                 identities = int(det[8])
                 categories = int(det[4])
                 cy, cx = int(det[0] + (det[2] - det[0]) / 2), int(det[1] + (det[3] - det[1]) // 2)
-                sf = startFinish.mask[cy, cx]
-
+                sf = startFinish.mask[cx, cy]
                 if sf:
                     if identities not in temp.index or sf == temp.loc[identities].startPath:
-                        temp.loc[identities] = [categories, sf, time.time(), 1000]
+                        temp.loc[identities] = [categories, sf, start, cx, cy, 1000]
                     else:
-                        arriveTime = time.time() - temp.loc[identities].startTime
-                        history.loc[identities] = [categories, temp.loc[identities].startPath, sf, arriveTime]
+                        arriveTime = start - temp.loc[identities].startTime
+                        pixelDifference = np.sqrt(
+                            (cx - temp.loc[identities].cx) ** 2 + (cy - temp.loc[identities].cy) ** 2)
+                        radian = np.arctan((cy - temp.loc[identities].cy) / (cx - temp.loc[identities].cx))
+                        history.loc[identities] = [categories, temp.loc[identities].startPath, sf, pixelDifference, radian,
+                                                   arriveTime]
                         temp.drop(identities, inplace=True)
                 temp.life -= 1
                 if len(temp) > 0:
                     temp.drop(temp[temp.life < 0].index, inplace=True)
-                print(temp)
+
+
             if len(tracked_dets) > 0:
                 bbox_xyxy = tracked_dets[:, :4]
                 identities = tracked_dets[:, 8]
@@ -135,9 +151,9 @@ while True:
                 im0 = draw_boxes(im0, bbox_xyxy, identities, categories, confidences, names, colors)
 
     cv2.imshow("frame", im0)
-    thread.timeSleep = max((sleepTime - (time.time() - start)), 0)
+    # thread.timeSleep = max((sleepTime - (time.time() - start)), 0)
     if cv2.waitKey(1) == key:
         cv2.destroyAllWindows()
         break
-
-thread.stop()
+history.to_csv("hist.csv")
+# thread.stop()
