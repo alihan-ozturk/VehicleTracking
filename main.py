@@ -12,7 +12,6 @@ from utils.general import non_max_suppression, scale_coords
 import random
 import pandas as pd
 from sort import *
-from utils.plots import plot_one_box
 
 # colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(4)]
 colors = [[0, 255, 223], [0, 191, 255], [80, 127, 255], [99, 49, 222]]
@@ -103,7 +102,6 @@ while True:
 
             for x1, y1, x2, y2, conf, detclass in det.cpu().detach().numpy():
 
-                # plot_one_box([x1, y1], [x2, y2], im0, label=detclass, color=colors[int(detclass)], line_thickness=1)
                 xx, yy, detclass = int((x2 - (x2 - x1) / 2)), int((y2 - (y2 - y1) / 2)), int(detclass)
                 path = maskC.mask[yy, xx]
                 if path != 0:
@@ -131,10 +129,10 @@ while True:
                         history.loc[identities] = [categories, temp.loc[identities].startPath, sf, pixelDifference, radian,
                                                    arriveTime]
                         temp.drop(identities, inplace=True)
-                temp.life -= 1
-                if len(temp) > 0:
-                    temp.drop(temp[temp.life < 0].index, inplace=True)
 
+                if len(temp) > 0:
+                    temp.life -= 1
+                    temp = temp[temp['life'] >= 0]
 
             if len(tracked_dets) > 0:
                 bbox_xyxy = tracked_dets[:, :4]
