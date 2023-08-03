@@ -12,6 +12,7 @@ from utils.general import non_max_suppression, scale_coords
 import random
 import pandas as pd
 from sort import *
+from utils.plots import plot_one_box
 
 # colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(4)]
 colors = [[0, 255, 223], [0, 191, 255], [80, 127, 255], [99, 49, 222]]
@@ -43,7 +44,7 @@ key = ord("q")
 #     thread.stop()
 #     sys.exit()
 
-cap = cv2.VideoCapture("test.ts")
+cap = cv2.VideoCapture("test2.ts")
 
 ret, lastFrame = cap.read()
 
@@ -53,9 +54,10 @@ startFinish = click(maskC.mask * 255 // len(maskC.masks), "startFinish.txt", sav
 ret, thresh = cv2.threshold(maskC.mask, 0, 255, cv2.THRESH_BINARY)
 pathSize = len(maskC.masks)
 
-sort_tracker = Sort(max_age=15,
+sort_tracker = Sort(max_age=12,
                     min_hits=6,
-                    iou_threshold=0.2)
+                    iou_threshold=0.1)
+
 temp = pd.DataFrame(columns=['id', 'class', 'startPath', 'startTime', 'cx', 'cy', 'life'])
 temp.set_index("id", inplace=True)
 
@@ -65,7 +67,7 @@ history.set_index("id", inplace=True)
 start = 0
 while True:
     start += 1
-    # im0 = thread.lastFrame.copy()
+    # im0 = thread.lastFrame.copy()q
     ret, im0 = cap.read()
     if not ret:
         break
@@ -100,6 +102,8 @@ while True:
             nv = {i + 1: {j: 0 for j in range(classSize)} for i in range(pathSize)}
 
             for x1, y1, x2, y2, conf, detclass in det.cpu().detach().numpy():
+
+                # plot_one_box([x1, y1], [x2, y2], im0, label=detclass, color=colors[int(detclass)], line_thickness=1)
                 xx, yy, detclass = int((x2 - (x2 - x1) / 2)), int((y2 - (y2 - y1) / 2)), int(detclass)
                 path = maskC.mask[yy, xx]
                 if path != 0:
@@ -131,6 +135,9 @@ while True:
                 if len(temp) > 0:
                     temp.drop(temp[temp.life < 0].index, inplace=True)
 
+            if start > 10000:
+                start = 0
+                history.to_csv("hist.csv")
 
             if len(tracked_dets) > 0:
                 bbox_xyxy = tracked_dets[:, :4]
