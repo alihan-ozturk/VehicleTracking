@@ -135,9 +135,6 @@ while True:
                 if len(temp) > 0:
                     temp.drop(temp[temp.life < 0].index, inplace=True)
 
-            if start > 10000:
-                start = 0
-                history.to_csv("hist.csv")
 
             if len(tracked_dets) > 0:
                 bbox_xyxy = tracked_dets[:, :4]
