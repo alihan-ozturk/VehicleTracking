@@ -107,9 +107,11 @@ while True:
                 if path != 0:
                     nv[path][detclass] += 1
                 label = f'{names[detclass]} {conf:.2f}'
+
                 dets_to_sort = np.vstack((dets_to_sort, np.array([x1, y1, x2, y2, conf, detclass])))
 
             cv2.putText(im0, json.dumps(nv), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (130, 18, 13), 2, cv2.LINE_AA)
+
             tracked_dets = sort_tracker.update(dets_to_sort, True)
             tracks = sort_tracker.getTrackers()
 
@@ -140,15 +142,15 @@ while True:
                 categories = tracked_dets[:, 4]
                 confidences = None
 
-                # for t, track in enumerate(tracks):
-                #     track_color = colors[int(track.detclass)]
-                #     [cv2.line(im0, (int(track.centroidarr[i][0]),
-                #                     int(track.centroidarr[i][1])),
-                #               (int(track.centroidarr[i + 1][0]),
-                #                int(track.centroidarr[i + 1][1])),
-                #               track_color, thickness=1)
-                #      for i, _ in enumerate(track.centroidarr)
-                #      if i < len(track.centroidarr) - 1]
+                for t, track in enumerate(tracks):
+                    track_color = colors[int(track.detclass)]
+                    [cv2.line(im0, (int(track.centroidarr[i][0]),
+                                    int(track.centroidarr[i][1])),
+                              (int(track.centroidarr[i + 1][0]),
+                               int(track.centroidarr[i + 1][1])),
+                              track_color, thickness=1)
+                     for i, _ in enumerate(track.centroidarr)
+                     if i < len(track.centroidarr) - 1]
 
                 im0 = draw_boxes(im0, bbox_xyxy, identities, categories, confidences, names, colors)
 
