@@ -7,6 +7,7 @@ class click:
     FONT = cv2.FONT_HERSHEY_SIMPLEX
     ALPHA = 0.5
     KEY = ord("s")
+    RESET = ord("r")
 
     def __init__(self, img, configName="config.txt", saveConfig=False, windowName="click"):
         self.img = img.copy()
@@ -54,7 +55,7 @@ class click:
 
         cv2.imshow(self.windowName, self.img)
         cv2.setMouseCallback(self.windowName, self.clickEvent)
-        KEY = cv2.waitKey(0)
+        KEY = cv2.waitKey(1)
 
         if len(self.pts) > 0:
             self.allPts.append(self.pts)
@@ -76,6 +77,12 @@ class click:
             self.img = self.backup.copy()
             cv2.addWeighted(masked, self.ALPHA, self.img, 1 - self.ALPHA, 0, self.img)
             self.temp = self.img.copy()
+            self.createMask()
+        elif KEY == self.RESET:
+            self.img = self.backup.copy()
+            self.temp = self.backup.copy()
+            self.pts = []
+            self.allPts = []
             self.createMask()
         else:
             cv2.destroyWindow(self.windowName)
